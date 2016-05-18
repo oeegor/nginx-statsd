@@ -82,8 +82,6 @@ static ngx_uint_t ngx_http_statsd_metric_value(ngx_str_t *str);
 static ngx_flag_t ngx_http_statsd_valid_get_value(ngx_http_request_t *r, ngx_http_complex_value_t *cv, ngx_flag_t v);
 static ngx_flag_t ngx_http_statsd_valid_value(ngx_str_t *str);
 
-uintptr_t ngx_escape_statsd_key(u_char *dst, u_char *src, size_t size);
-
 static ngx_int_t ngx_http_statsd_init(ngx_conf_t *cf);
 
 static ngx_command_t  ngx_http_statsd_commands[] = {
@@ -266,7 +264,6 @@ ngx_http_statsd_handler(ngx_http_request_t *r)
 
 		stat = stats[c];
 		s = ngx_http_statsd_key_get_value(r, stat.ckey, stat.key);
-		ngx_escape_statsd_key(s.data, s.data, s.len);
 
 		n = ngx_http_statsd_metric_get_value(r, stat.cmetric, stat.metric);
 		b = ngx_http_statsd_valid_get_value(r, stat.cvalid, stat.valid);
@@ -684,67 +681,4 @@ ngx_http_statsd_init(ngx_conf_t *cf)
     }
 
     return NGX_OK;
-}
-
-uintptr_t
-ngx_escape_statsd_key(u_char *dst, u_char *src, size_t size)
-{
-    ngx_uint_t      n;
-    uint32_t       *escape;
-
-                    /* " ", "#", """, "%", "'", %00-%1F, %7F-%FF */
-
-    static uint32_t   statsd_key[] = {
-        0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
-
-                    /* ?>=< ;:98 7654 3210  /.-, +*)( '&%$ #"!  */
-		0xfc00bfff, /* 1111 1100 0000 0000  1011 1111 1111 1111 */
-
-                    /* _^]\ [ZYX WVUT SRQP  ONML KJIH GFED CBA@ */
-		0x78000001, /* 0111 1000 0000 0000  0000 0000 0000 0001 */
-
-                    /*  ~}| {zyx wvut srqp  onml kjih gfed cba` */
-		0xf8000001, /* 1111 1000 0000 0000  0000 0000 0000 0001 */
-
-        0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
-        0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
-        0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
-        0xffffffff  /* 1111 1111 1111 1111  1111 1111 1111 1111 */
-    };
-
-    static uint32_t  *map[] =
-        { statsd_key };
-
-
-    escape = map[0];
-
-    if (dst == NULL) {
-
-        /* find the number of the characters to be escaped */
-
-        n = 0;
-
-        while (size) {
-            if (escape[*src >> 5] & (1 << (*src & 0x1f))) {
-                n++;
-            }
-            src++;
-            size--;
-        }
-
-        return (uintptr_t) n;
-    }
-
-    while (size) {
-        if (escape[*src >> 5] & (1 << (*src & 0x1f))) {
-            *dst++ = '_';
-            src++;
-
-        } else {
-            *dst++ = *src++;
-        }
-        size--;
-    }
-
-    return (uintptr_t) dst;
 }
